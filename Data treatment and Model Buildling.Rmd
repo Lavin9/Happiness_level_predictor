@@ -1,0 +1,180 @@
+
+***
+#Clean workspace and load library
+***
+
+```{r}
+rm(list=ls())
+library(readr)
+library(rvest)
+library(dplyr)
+library(e1071)
+library(ggplot2)
+```
+
+***
+#Import and check data
+***
+
+the data is imported from World Happiness Report, available at https://www.kaggle.com/unsdsn/world-happiness/data
+
+
+```{r}
+raw_data <- read_csv("2015.csv")
+dim(raw_data)
+head(raw_data)
+```
+
+The data has 158 rows and 12 columns, showing happiness score and other information for 158 countries. In particular, each country has a happiness score and scores for 6 factors: economic production, social support, life expectancy, freedom, absence of corruption, and generosity. The country with the lowest national average for a factor receives 0 for that factor, and the score other countries received for that factor is the extent to which they outperform the country with the lowest national average. 
+
+```{r}
+summary(raw_data)
+```
+***
+The summary above shows that there is no missing value or unusual data.
+***
+The original data is ordered by happiness score. Here, it is re-ordered by descending order of country name, which is a more arbitary ordering that can make the division of training and testing sets more random.  
+
+```{r}
+raw_data <-  arrange(raw_data, desc(Country))
+```
+
+Dystopia Residual is the difference between the value of the six factors summed and the happiness score, and it is not related to this study. In addition, 'Country', 'Happiness Rank', 'Standard Error'are not relevant, so only relevant variables are selected, and they are renamed for convenience and Region shall be categorical. 
+
+
+```{r}
+dataset1 <- raw_data %>% select (Region, 'Happiness Score', 'Economy (GDP per Capita)', Family, 'Health (Life Expectancy)', Freedom, 'Trust (Government Corruption)', Generosity)
+dataset1 <- dataset1 %>% rename(Happiness_score = 'Happiness Score')
+dataset1 <- dataset1 %>% rename(GDP_per_Capita = 'Economy (GDP per Capita)')
+dataset1 <- dataset1 %>% rename(Life_expectancy = 'Health (Life Expectancy)')
+dataset1 <- dataset1 %>% rename(Trust_in_Government = 'Trust (Government Corruption)')
+dataset1$Region <- factor(dataset1$Region)
+```
+
+***
+#Check for normality, outlier and correlation
+***
+
+```{r}
+plot(density(dataset1$Happiness_score), main="Density Plot: Happiness_score", ylab="Frequency", sub=paste("Skewness:", round(e1071::skewness(dataset1$Happiness_score), 2))) 
+polygon(density(dataset1$Happiness_score), col="blue")
+
+```
+
+***
+The distribution of Happiness_score approximates normal with very low skewness. 
+
+***
+
+```{r}
+ggplot(data = dataset1,aes(x = GDP_per_Capita, y = Happiness_score)) + geom_point() +geom_smooth()
+ggplot(data = dataset1,aes(x = Family, y = Happiness_score)) + geom_point() +geom_smooth()
+ggplot(data = dataset1,aes(x = Life_expectancy, y = Happiness_score)) + geom_point() +geom_smooth()
+ggplot(data = dataset1,aes(x = Freedom, y = Happiness_score)) + geom_point() +geom_smooth()
+ggplot(data = dataset1,aes(x = Trust_in_Government, y = Happiness_score)) + geom_point() +geom_smooth()
+ggplot(data = dataset1,aes(x = Generosity, y = Happiness_score)) + geom_point() +geom_smooth()
+```
+
+
+The above plots show that there is likely to be linear relationship between Happiness_score and some variables. Therefore, linear regression model can predict happiness score.
+
+***
+
+```{r}
+boxplot(dataset1$Happiness_score, main="Happiness Score", sub=paste("Outlier rows: ", boxplot.stats(dataset1$Happiness_score)$out)) 
+```
+
+The graph shows that there is no outlier for Happiness_score.
+
+***
+
+To build a linear regression model and test the model, the data is subsetted with 80%  used for training and 20% for testing.  
+
+***
+
+```{r}
+trainingData <- dataset1[1:126,]
+testData <- dataset1[127:158,]
+```
+
+***
+#The first linear regression model 
+***
+
+```{r}
+LM1 <- lm(Happiness_score ~ GDP_per_Capita + Family + Life_expectancy + Freedom + Trust_in_Government + Generosity + Region, trainingData)
+summary(LM1)
+AIC_1 <- AIC(LM1)
+BIC_1 <- BIC(LM1)
+cat("AIC: ", AIC_1, '\n')
+cat("BIC: ", BIC_1, '\n')
+par(mfrow=c(2, 2))
+plot(LM1)
+```
+
+***
+
+Multiple R-squared and Adjusted R-squared are above 0.7, p-value is close to zero, so the model is generally fine and the residual plots are relatively flat 
+
+The summary shows that GDP_per_capita, Family, Trust_in_Government, and Freedom are satistically significant variables 
+
+***
+#Test the first model
+***
+
+```{r}
+happinessPred <- predict(LM1, testData)
+actuals_preds <- data.frame(cbind(actuals = testData$Happiness_score, predicteds = happinessPred))
+correlation_accuracy <- cor(actuals_preds)
+min_max_accuracy <- mean(apply(actuals_preds, 1, min) / apply(actuals_preds, 1, max))
+mape <- mean(abs((actuals_preds$predicteds - actuals_preds$actuals))/actuals_preds$actuals)
+head(actuals_preds)
+cat('Correlation accuracy: ',correlation_accuracy[2],'\n')
+cat('Min-Max Accuracy: ', min_max_accuracy,'\n')
+cat('Mean absolute percentage error',mape,'\n')
+```
+***
+
+The accuracy of prediction is very high. We will continue to build the second regression model with only statistically significant variables to see if it can perform even better.
+
+***
+#The second linear regression model 
+***
+
+```{r}
+LM2 <- lm(Happiness_score ~ GDP_per_Capita + Family + Freedom + Trust_in_Government, trainingData)
+summary(LM2)
+AIC_2 <- AIC(LM2)
+BIC_2 <- BIC(LM2)
+cat("AIC: ", AIC_2, '\n')
+cat("BIC: ", BIC_2, '\n')
+plot(LM2)
+```
+
+***
+Multiple R-squared and Adjusted R-squared are above 0.7, p-value is close to zero and almost flat residual plots show that the model works well 
+
+***
+# test of the second model
+***
+
+```{r}
+happinessPred2 <- predict(LM2, testData)
+actuals_preds2 <- data.frame(cbind(actuals = testData$Happiness_score, predicteds = happinessPred2))
+correlation_accuracy2 <- cor(actuals_preds2)
+min_max_accuracy2 <- mean(apply(actuals_preds2, 1, min) / apply(actuals_preds2, 1, max))
+mape2 <- mean(abs((actuals_preds2$predicteds - actuals_preds2$actuals))/actuals_preds2$actuals)
+head(actuals_preds2)
+cat('Correlation accuracy: ',correlation_accuracy2[2],'\n')
+cat('Min_Max Accuracy: ', min_max_accuracy2,'\n')
+cat('Mean absolute percentage error: ',mape2,'\n')
+```
+***
+#Conclusion
+***
+In comparison, the first model has smaller AIC, higher Multiple R-squared and	Adjusted R-squared, higher correlation accuracy, higher Min_Max Accuracy, and lower Mean absolute percentage error, so the first model is better in predicting happiness level. So the first model is chosen.
+
+A prediction function and a Shiny application are built with this regression model.
+
+
+

@@ -1,0 +1,11 @@
+Package: Happiness
+Type: Package
+Title: Happiness level prediction with score of GDP, Family, Freedom and Trust and others 
+Version: 0.1.0
+Author: Ran Huo
+Maintainer: Ran Huo <ran.huo@hec.edu>
+Description: Predicts happiness level with info.
+License: GPL-3
+Encoding: UTF-8
+LazyData: true
+RoxygenNote: 6.0.1
